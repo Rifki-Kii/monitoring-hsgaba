@@ -24,6 +24,7 @@ use App\Http\Controllers\MapelController;
 use App\Http\Controllers\NilaiController;
 use App\Http\Controllers\SiswaController;
 use App\Http\Controllers\LaporanController;
+use App\Http\Controllers\TentangController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\StatistikController;
 
@@ -131,6 +132,8 @@ Route::middleware('auth')->group(function () {
     Route::get('/statistik/kedisiplinan', StatistikKedisiplinan::class)->name('statistik.kedisiplinan');
     Route::get('/laporan', LaporanIndex::class)->name('laporan.index');
 });
+
+Route::get('/tentang', [TentangController::class, 'index'])->name('tentang.index');
    
 
 });
