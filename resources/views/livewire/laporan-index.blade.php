@@ -156,7 +156,7 @@
     @endif
 
     {{-- ================================================= --}}
-    {{-- TABEL KEDISIPLINAN (UPDATE LOGIKA SANKSI 20 POIN) --}}
+    {{-- TABEL KEDISIPLINAN (UPDATE STATUS DARI DB)        --}}
     {{-- ================================================= --}}
     @if($activeTab == 'kedisiplinan')
         <div class="bg-white rounded-xl shadow-lg border border-slate-200 overflow-visible no-print animate-fade-in">
@@ -182,10 +182,10 @@
                                     </div>
                                 </td>
                                 
-                                {{-- Pelanggaran (Dropdown) --}}
+                                {{-- Pelanggaran (Compact Dropdown) --}}
                                 <td class="px-6 py-3">
                                     @if($row['jumlah_kasus'] == 0)
-                                        <span class="text-slate-300 text-xs italic">Tidak Ada</span>
+                                        <span class="text-slate-300 text-xs italic">Nihil</span>
                                     @elseif($row['jumlah_kasus'] == 1)
                                         @php $p = $row['list_pelanggaran'][0]; @endphp
                                         <div class="inline-flex items-center gap-2 px-2.5 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium text-slate-700">
@@ -222,30 +222,49 @@
                                     @endif
                                 </td>
 
-                                {{-- Status Sanksi (Logika Baru) --}}
-                                <td class="px-6 py-3 text-center whitespace-nowrap">
-                                    @if($row['total_poin'] > 20)
-                                        {{-- LEBIH DARI 20 = SANKSI TINDAKAN (Merah) --}}
-                                        <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-600 text-white shadow-sm">
-                                            <i class="fas fa-gavel text-[9px]"></i> SANKSI TINDAKAN
-                                        </span>
-                                    @elseif($row['total_poin'] > 0)
-                                        {{-- 1 SAMPAI 20 = TEGURAN LISAN (Kuning/Orange) --}}
-                                        <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-yellow-100 text-yellow-700 border border-yellow-200">
-                                            <i class="fas fa-comment-dots text-[9px]"></i> TEGURAN LISAN
+                                {{-- Status Sanksi (AMBIL DARI DATABASE) --}}
+                                <td class="px-6 py-3 text-center align-middle">
+                                    @if(!empty($row['status_sanksi']))
+                                        {{-- JIKA SUDAH ADA TINDAKAN DARI GURU --}}
+                                        @php
+                                            $s = $row['status_sanksi'];
+                                            $style = 'bg-slate-100 text-slate-600 border-slate-300';
+                                            if (Str::contains($s, ['SP', 'Peringatan', 'Skorsing', 'Tindakan', 'Orang Tua'])) {
+                                                $style = 'bg-rose-100 text-rose-700 border-rose-200';
+                                            } elseif (Str::contains($s, ['Piket', 'Pembinaan', 'Bersih'])) {
+                                                $style = 'bg-orange-100 text-orange-700 border-orange-200';
+                                            } elseif (Str::contains($s, ['Teguran', 'Lisan', 'Nasihat'])) {
+                                                $style = 'bg-blue-100 text-blue-700 border-blue-200';
+                                            }
+                                        @endphp
+                                        <span class="inline-block px-3 py-1.5 rounded-md border text-[10px] font-bold uppercase tracking-wide whitespace-nowrap shadow-sm {{ $style }}">
+                                            {{ $s }}
                                         </span>
                                     @else
-                                        {{-- 0 = AMAN (Hijau) --}}
-                                        <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-600 border border-emerald-100">
-                                            <i class="fas fa-check text-[9px]"></i> TIDAK ADA 
-                                        </span>
+                                        {{-- JIKA BELUM ADA TINDAKAN (TAMPILKAN REKOMENDASI SISTEM) --}}
+                                        @if($row['total_poin'] > 0)
+                                            <div class="flex flex-col items-center gap-1">
+                                                <span class="inline-block px-2 py-1 rounded-md border border-slate-200 bg-slate-50 text-slate-400 text-[10px] font-bold whitespace-nowrap">
+                                                    Belum Ditindak
+                                                </span>
+                                                @if($row['total_poin'] >= 20)
+                                                    <span class="text-[9px] text-rose-600 font-extrabold animate-pulse whitespace-nowrap">
+                                                        ! WAJIB PROSES
+                                                    </span>
+                                                @endif
+                                            </div>
+                                        @else
+                                            <span class="inline-block px-3 py-1 rounded-md border border-emerald-200 bg-emerald-50 text-emerald-600 text-[10px] font-bold uppercase tracking-wide whitespace-nowrap opacity-80">
+                                                Aman
+                                            </span>
+                                        @endif
                                     @endif
                                 </td>
 
                                 {{-- Opsi --}}
                                 <td class="px-6 py-3 text-center whitespace-nowrap">
                                     @if($row['total_poin'] > 0)
-                                        <button wire:click="openModal('sp', {{ $row['id'] }})" class="text-[10px] font-bold text-rose-600 hover:text-rose-800 bg-white border border-rose-200 hover:bg-rose-50 px-3 py-1 rounded shadow-sm transition flex items-center justify-center gap-1 mx-auto"><i class="fas fa-file-contract"></i> Cetak SP</button>
+                                        <button wire:click="openModal('sp', {{ $row['id'] }})" class="text-[10px] font-bold text-slate-600 hover:text-rose-600 bg-white border border-slate-300 hover:border-rose-300 px-3 py-1 rounded shadow-sm transition flex items-center justify-center gap-1 mx-auto"><i class="fas fa-print"></i> Cetak SP</button>
                                     @else
                                         <span class="text-slate-300">-</span>
                                     @endif
@@ -260,7 +279,7 @@
         </div>
     @endif
 
-    {{-- MODAL PREVIEW (UPDATE LOGIKA DI SURAT JUGA) --}}
+    {{-- MODAL PREVIEW (UPDATE LOGIKA SANKSI DATABASE) --}}
     @if($showModal && $selectedSiswa)
         <div wire:click.self="closeModal" class="fixed inset-0 z-[999] bg-slate-900/80 backdrop-blur-sm flex items-start justify-center overflow-y-auto p-4 md:p-8 print:p-0 print:bg-white print:fixed print:inset-0">
             <div class="bg-white w-full max-w-4xl rounded-xl shadow-2xl relative print:shadow-none print:w-full print:max-w-none transform transition-all scale-100">
@@ -310,7 +329,7 @@
                     @if($modalType == 'sp')
                         <div class="text-center mb-8">
                             <h2 class="text-xl font-bold uppercase underline tracking-wide">
-                                {{ $totalPoinSiswa > 20 ? 'SURAT SANKSI TINDAKAN' : 'LAPORAN KEDISIPLINAN' }}
+                                {{ Str::contains($selectedSiswa->status_sanksi ?? '', 'SP') ? 'SURAT PERINGATAN' : 'LAPORAN KEDISIPLINAN' }}
                             </h2>
                             <p class="text-sm mt-1">Nomor: {{ rand(100,999) }}/BK/{{ date('m') }}/{{ date('Y') }}</p>
                         </div>
@@ -322,9 +341,11 @@
                                 <tr><td class="font-bold py-1">Kelas</td><td>: {{ $selectedSiswa->kelas->nama_kelas }}</td></tr>
                                 <tr><td class="font-bold py-1">Total Poin</td><td class="font-bold">: {{ $totalPoinSiswa }} Poin</td></tr>
                                 <tr><td class="font-bold py-1">Status Sanksi</td><td class="font-bold uppercase text-red-600">: 
-                                    @if($totalPoinSiswa > 20) SANKSI TINDAKAN (BERAT)
-                                    @elseif($totalPoinSiswa > 0) TEGURAN LISAN
-                                    @else AMAN
+                                    @if($selectedSiswa->status_sanksi)
+                                        {{ $selectedSiswa->status_sanksi }}
+                                    @else
+                                        {{-- Fallback jika belum ditindak tapi mau cetak laporan --}}
+                                        @if($totalPoinSiswa > 0) BELUM DITENTUKAN @else AMAN @endif
                                     @endif
                                 </td></tr>
                             </table>
@@ -341,8 +362,8 @@
                             </tbody>
                         </table>
                         <p class="text-justify mb-8">
-                            @if($totalPoinSiswa > 20)
-                                Mengingat poin pelanggaran telah melampaui batas toleransi (20 Poin), kami memohon kehadiran Bapak/Ibu di sekolah untuk pembahasan tindak lanjut bersama Kepala Sekolah dan Tim Kedisiplinan.
+                            @if(Str::contains($selectedSiswa->status_sanksi ?? '', ['Tindakan', 'SP', 'Panggilan']))
+                                Mengingat poin pelanggaran telah mencapai tingkat yang memerlukan perhatian khusus, kami memohon kehadiran Bapak/Ibu di sekolah untuk pembahasan tindak lanjut bersama Kepala Sekolah dan Tim Kedisiplinan.
                             @elseif($totalPoinSiswa > 0)
                                 Laporan ini disampaikan sebagai bahan evaluasi bersama untuk meningkatkan kedisiplinan siswa di masa mendatang.
                             @else

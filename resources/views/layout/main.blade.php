@@ -33,7 +33,7 @@
     <div class="flex-1 min-h-screen">
 
         {{-- Navbar --}}
-        @include('layout.navbar')
+       @livewire('navbar', ['title' => $title ?? 'Dashboard'])
 
         {{-- Konten Utama --}}
         <main class="p-6">

@@ -85,49 +85,30 @@ class LaporanIndex extends Component
     }
 
     // --- DOWNLOAD EXCEL ---\\
-    public function downloadExcel()
+   public function downloadExcel()
     {
-        // 1. Tentukan Nama File & Judul Laporan berdasarkan Filter
+        // 1. Tentukan Nama File & Judul
         if ($this->filterKelas) {
             $kelas = $this->listKelas->find($this->filterKelas);
             $namaKelas = $kelas ? $kelas->nama_kelas : 'Kelas';
         } else {
-            // Jika filter kosong (hanya bisa di kedisiplinan), judulnya SEMUA SISWA
             $namaKelas = 'SEMUA SISWA';
         }
 
-        // 2. Cek Tab Aktif
+        // 2. Eksekusi Download
         if ($this->activeTab == 'akademik') {
-            // --- EXPORT LEGER (AKADEMIK) ---
             $data = $this->getDataAkademik();
-            
-            // Nama File: Leger_Nilai_Kelas_7A_20250127.xlsx
-            $fileName = 'Leger_Nilai_' . str_replace(' ', '_', $namaKelas) . '_' . date('Ymd') . '.xlsx';
-            
+            $fileName = 'Leger_Nilai_' . date('Ymd_His') . '.xlsx';
             return Excel::download(new LegerExport($data['legerData'], $data['mapels'], $namaKelas), $fileName);
-        } 
-        else {
-            // --- EXPORT PELANGGARAN (KEDISIPLINAN) ---
-            $data = $this->getDataKedisiplinan();
+        } else {
+            // BAGIAN KEDISIPLINAN (PERBAIKAN)
+            // Ambil data mentah langsung (sudah ada status_sanksi & nama_kelas di dalamnya)
+            $data = $this->getDataKedisiplinan(); 
             
-            // Map data agar sesuai struktur yang dibutuhkan View Excel
-            // Kita ambil 'nama_kelas' dari hasil query dan masukkan ke key 'kelas'
-            $exportData = $data->map(function($item){
-                return [
-                    'nama' => $item['nama'],
-                    'kelas' => $item['nama_kelas'], // <--- PERBAIKAN UTAMA DI SINI (Agar muncul nama kelas asli)
-                    'jumlah_kasus' => $item['jumlah_kasus'],
-                    'total_poin' => $item['total_poin']
-                ];
-            });
-
-            // Format Periode Laporan
             $periode = date('d M Y', strtotime($this->startDate)) . ' - ' . date('d M Y', strtotime($this->endDate));
+            $fileName = 'Laporan_Disiplin_' . date('Ymd_His') . '.xlsx';
             
-            // Nama File: Laporan_Disiplin_SEMUA_SISWA_20250127.xlsx
-            $fileName = 'Laporan_Disiplin_' . str_replace(' ', '_', $namaKelas) . '_' . date('Ymd') . '.xlsx';
-            
-            return Excel::download(new LaporanKedisiplinanExport($exportData, $namaKelas, $periode), $fileName);
+            return Excel::download(new LaporanKedisiplinanExport($data, $namaKelas, $periode), $fileName);
         }
     }
 
@@ -159,12 +140,13 @@ class LaporanIndex extends Component
                 ];
             });
 
-            return [
+           return [
                 'id' => $siswa->id, 
                 'nama' => $siswa->nama, 
                 'nis' => $siswa->nis,
-                'nama_kelas' => $siswa->kelas->nama_kelas, // <--- TAMBAHAN PENTING
+                'nama_kelas' => $siswa->kelas->nama_kelas, 
                 'total_poin' => $poin, 
+                'status_sanksi' => $siswa->status_sanksi, // <--- TAMBAHKAN BARIS PENTING INI
                 'jumlah_kasus' => $siswa->catatanPelanggarans->count(),
                 'list_pelanggaran' => $listPelanggaran
             ];

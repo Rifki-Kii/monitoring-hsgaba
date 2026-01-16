@@ -21,7 +21,8 @@ class Siswa extends Model
         'tanggal_lahir',
         'alamat',
         'nama_ayah',
-        'nama_ibu'
+        'nama_ibu',
+        'status_sanksi'
     ];
 
     // Relasi: Satu Siswa milik Satu Kelas
