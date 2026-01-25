@@ -10,14 +10,16 @@ use Livewire\Component;
 use App\Exports\NilaiExport;
 use App\Imports\NilaiImport;
 use Illuminate\Support\Facades\Auth;
-use Livewire\WithFileUploads; // <--- WAJIB
-use Maatwebsite\Excel\Facades\Excel; // <--- WAJIB
+use Livewire\WithFileUploads;
+use Maatwebsite\Excel\Facades\Excel;
 
 class NilaiIndex extends Component
 {
+    use WithFileUploads;
+
     // --- 1. DATA MASTER ---
     public $kelasList = [];
-    public $mapelList = [];
+    public $mapelList = []; // <--- Ini nanti isinya berubah-ubah sesuai kelas
     public $tahunList = ['2023/2024', '2024/2025', '2025/2026', '2026/2027'];
 
     // --- 2. FILTER & STATE ---
@@ -32,45 +34,99 @@ class NilaiIndex extends Component
     
     public $kkm = 75; 
     public $mode = 'view'; 
+    public $fileImport;
 
-    use WithFileUploads; // <--- Pasang Trait ini
-
-    // ... properti lama biarkan
-    public $fileImport; // <---
     public function mount()
     {
-        $this->kelasList = Kelas::all();
-        $this->mapelList = Mapel::all();
+        // 1. Ambil Semua Kelas
+        $this->kelasList = Kelas::orderBy('nama_kelas', 'asc')->get();
+        
+        // 2. Set Default Filter
         $this->tahun_ajaran = '2025/2026';
         $this->semester = 'genap';
 
-        if ($this->kelasList->count() > 0) $this->kelas_id = $this->kelasList->first()->id;
-        if ($this->mapelList->count() > 0) $this->mapel_id = $this->mapelList->first()->id;
+        // 3. Set Default Kelas (Ambil yang pertama)
+        if ($this->kelasList->count() > 0) {
+            $this->kelas_id = $this->kelasList->first()->id;
+        }
 
+        // 4. [LOGIKA BARU] Load Mapel sesuai Kelas yang terpilih
+        $this->loadMapelByKelas();
+
+        // 5. Load Data Siswa & Nilai
         if ($this->kelas_id && $this->mapel_id) {
-            $this->updateKKM();
             $this->loadSiswa();
         }
     }
 
-    public function updatedKelasId() { $this->loadSiswa(); }
-    public function updatedMapelId() { $this->updateKKM(); $this->loadSiswa(); }
+    // --- LISTENER SAAT FILTER BERUBAH ---
+
+    public function updatedKelasId() 
+    { 
+        // Saat ganti kelas, Mapel harus direfresh
+        $this->loadMapelByKelas(); 
+        $this->loadSiswa(); 
+    }
+
+    public function updatedMapelId() 
+    { 
+        $this->updateKKM(); 
+        $this->loadSiswa(); 
+    }
+    
     public function updatedTahunAjaran() { $this->loadSiswa(); } 
     public function updatedSemester() { $this->loadSiswa(); }    
     public function gantiMode($modeBaru) { $this->mode = $modeBaru; $this->loadSiswa(); }
+
+    // --- [BARU] LOGIKA FILTER MAPEL ---
+    public function loadMapelByKelas()
+    {
+        // Kosongkan dulu
+        $this->mapelList = [];
+
+        if ($this->kelas_id) {
+            // Ambil data kelas beserta relasi mapels-nya
+            $kelas = Kelas::with('mapels')->find($this->kelas_id);
+
+            if ($kelas && $kelas->mapels->count() > 0) {
+                // Isi Dropdown dengan Mapel milik kelas tersebut
+                $this->mapelList = $kelas->mapels->sortBy('nama_mapel');
+                
+                // Otomatis pilih mapel pertama agar user tidak bingung
+                $this->mapel_id = $this->mapelList->first()->id;
+            } else {
+                // Jika kelas belum di-setting mapelnya
+                $this->mapel_id = null;
+            }
+        }
+        
+        // Update KKM sesuai mapel yang baru terpilih
+        $this->updateKKM();
+    }
 
     public function updateKKM()
     {
         if ($this->mapel_id) {
             $mapel = Mapel::find($this->mapel_id);
             $this->kkm = $mapel->kkm ?? 75;
+        } else {
+            $this->kkm = 0;
         }
     }
 
     public function loadSiswa()
     {
+        // Reset data dulu
+        $this->siswaList = [];
+        $this->inputNilai = [];
+
+        // Hanya load jika Kelas & Mapel sudah terpilih
         if ($this->kelas_id && $this->mapel_id) {
-            $siswas = Siswa::where('kelas_id', $this->kelas_id)->orderBy('nama', 'asc')->get();
+            
+            $siswas = Siswa::where('kelas_id', $this->kelas_id)
+                           ->orderBy('nama', 'asc') // Pastikan nama kolom di DB 'nama' atau 'nama_lengkap'
+                           ->get();
+            
             $this->siswaList = $siswas;
 
             foreach ($siswas as $siswa) {
@@ -81,14 +137,11 @@ class NilaiIndex extends Component
                     ->first();
 
                 $this->inputNilai[$siswa->id] = [
-                    // Kolom Inputan Utama (SUDAH BERSIH DARI UH1-3)
                     'rata_uh' => $existing->rata_uh ?? null, 
                     'tugas' => $existing->tugas ?? null, 
                     'pts' => $existing->uts ?? null, 
                     'pas' => $existing->uas ?? null, 
                     'keterampilan' => $existing->keterampilan ?? null,
-                    
-                    // Kolom Hasil Hitung
                     'nilai_pengetahuan' => $existing->nilai_akhir ?? 0, 
                     'nilai_raport' => $existing->nilai_raport ?? 0,
                     'predikat' => $existing->predikat ?? '-',
@@ -102,25 +155,25 @@ class NilaiIndex extends Component
     {
         $data = $this->inputNilai[$siswaId];
         
-        // --- 1. AMBIL INPUTAN ---
-        $rataUH = $data['rata_uh'] ?? 0; // Nilai A
-        $nilaiB = $data['tugas'] ?? 0;   // Nilai B
-        $nilaiC = $data['pts'] ?? 0;     // Nilai C
-        $nilaiD = $data['pas'] ?? 0;     // Nilai D
+        // --- 1. AMBIL INPUTAN (UBAH BAGIAN INI) ---
+        // Tambahkan (float) di depannya agar string kosong "" atau null terbaca sebagai angka 0
+        $rataUH = (float) ($data['rata_uh'] ?? 0);
+        $nilaiB = (float) ($data['tugas'] ?? 0);
+        $nilaiC = (float) ($data['pts'] ?? 0);
+        $nilaiD = (float) ($data['pas'] ?? 0);
 
         // --- 2. HITUNG NILAI PENGETAHUAN (N) ---
-        // Rumus: (A + B + C + D) / 4
         $nilaiPengetahuan = ($rataUH + $nilaiB + $nilaiC + $nilaiD) / 4;
         $nilaiPengetahuanBulat = round($nilaiPengetahuan); 
 
         // --- 3. HITUNG NILAI RAPORT ---
-        $nilaiKeterampilan = $data['keterampilan'] ?? 0;
+        // Ini juga tambahkan (float)
+        $nilaiKeterampilan = (float) ($data['keterampilan'] ?? 0);
         
-        // Rumus Akhir = (Pengetahuan + Keterampilan) / 2
         $nilaiRaport = ($nilaiPengetahuanBulat + $nilaiKeterampilan) / 2;
         $nilaiRaportBulat = round($nilaiRaport);
 
-        // --- 4. TENTUKAN PREDIKAT (DARI NILAI RAPORT) ---
+        // --- 4. TENTUKAN PREDIKAT ---
         $predikat = 'D';
         if ($nilaiRaportBulat >= 95) $predikat = 'A+';
         elseif ($nilaiRaportBulat >= 90) $predikat = 'A';
@@ -155,7 +208,7 @@ class NilaiIndex extends Component
                     'kelas_id' => $this->kelas_id,
                     'guru_id' => Auth::id(),
                     
-                    'rata_uh' => $nilai['rata_uh'], // Simpan Rata UH
+                    'rata_uh' => $nilai['rata_uh'],
                     'tugas' => $nilai['tugas'], 
                     'uts' => $nilai['pts'],     
                     'uas' => $nilai['pas'],     
@@ -165,8 +218,6 @@ class NilaiIndex extends Component
                     'nilai_raport' => $nilai['nilai_raport'],
                     'predikat' => $nilai['predikat'],
                     'status' => $nilai['status'],
-                    
-                    // PERBAIKAN: SAYA SUDAH MENGHAPUS 'uh1', 'uh2', 'uh3' DARI SINI
                 ]
             );
         }
@@ -176,12 +227,15 @@ class NilaiIndex extends Component
 
     public function exportExcel()
     {
-        // Validasi filter harus dipilih dulu
         if (!$this->kelas_id || !$this->mapel_id) {
             return session()->flash('error', 'Pilih Kelas dan Mapel terlebih dahulu.');
         }
 
-        $namaFile = 'Nilai_Kelas_' . $this->kelasList->find($this->kelas_id)->nama_kelas . '_' . date('Ymd_His') . '.xlsx';
+        // Ambil nama kelas untuk nama file (Handle jika kelas tidak ditemukan)
+        $kelas = $this->kelasList->where('id', $this->kelas_id)->first();
+        $namaKelas = $kelas ? $kelas->nama_kelas : 'Unknown';
+
+        $namaFile = 'Nilai_Kelas_' . $namaKelas . '_' . date('Ymd_His') . '.xlsx';
 
         return Excel::download(new NilaiExport(
             $this->kelas_id, 
@@ -192,7 +246,6 @@ class NilaiIndex extends Component
         ), $namaFile);
     }
 
-    // --- FITUR IMPORT ---
     public function importExcel()
     {
         $this->validate([
@@ -207,8 +260,8 @@ class NilaiIndex extends Component
             $this->kkm
         ), $this->fileImport);
 
-        $this->fileImport = null; // Reset file
-        $this->loadSiswa(); // Refresh tabel
+        $this->fileImport = null;
+        $this->loadSiswa();
         session()->flash('message', 'Data Nilai Berhasil Di-import!');
     }
 

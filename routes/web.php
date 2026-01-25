@@ -123,15 +123,21 @@ Route::middleware('auth')->group(function () {
     | Admin & Wali Kelas
     |--------------------------------------------------------------------------
     */
-    Route::middleware('role:admin,wali_kelas')->group(function () {
+    Route::middleware('role:admin,guru,wali_kelas')->group(function () {
     
     // Route Khusus Akademik
     Route::get('/statistik/akademik', StatistikAkademik::class)->name('statistik.akademik');
 
     // Route Khusus Kedisiplinan
     Route::get('/statistik/kedisiplinan', StatistikKedisiplinan::class)->name('statistik.kedisiplinan');
-    Route::get('/laporan', LaporanIndex::class)->name('laporan.index');
+
+
+    
 });
+
+Route::middleware(['auth', 'role:admin,wali_kelas'])->group(function () {
+        Route::get('/laporan', LaporanIndex::class)->name('laporan.index');
+    });
 
 Route::get('/tentang', [TentangController::class, 'index'])->name('tentang.index');
    
